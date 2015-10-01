@@ -10,16 +10,16 @@ import Yesod
 import Data.Text
 import Data.Monoid
 
-data Wizard = Wizard
+data App = App
 
-mkYesod "Wizard" [parseRoutes|
-/    EntryR    GET POST
-/c   ConfirmR  POST
+mkYesod "App" [parseRoutes|
+/    EntryR  GET POST
+/c   InsertR POST
 |]
 
-instance Yesod Wizard
+instance Yesod App
 
-instance RenderMessage Wizard FormMessage where
+instance RenderMessage App FormMessage where
   renderMessage _ _ = defaultFormMessage
 
 data Person = Person { personName :: Text
@@ -48,9 +48,8 @@ addressForm mv = renderDivs $ Address
 
 getEntryR :: Handler Html
 getEntryR = do
-  ((_, w), e) <- runFormGet $ personForm Nothing
-  defaultLayout $ do
-    setTitle "Person"
+  ((_, w), e) <- runFormPost $ personForm Nothing
+  defaultLayout
     [whamlet|
      <form method=post action=@{EntryR} enctype=#{e}>
        ^{w}
@@ -59,33 +58,34 @@ getEntryR = do
 
 postEntryR :: Handler Html
 postEntryR = do
-  ((r, _), _) <- runFormPost $ personForm Nothing
+  ((r, w), e) <- runFormPost $ personForm Nothing
   case r of
     FormSuccess p -> do
-      ((_, wp), ep) <- runFormPost $ hiddenForm p
-      ((_, wa), ea) <- runFormPost $ addressForm Nothing
+      ((_, wp), ep) <- runFormPost $ identifyForm "person" $ hiddenForm p
+      ((_, wa), ea) <- runFormPost $ identifyForm "address" $ addressForm Nothing
       let e = ep <> ea
-      defaultLayout $ do
-        setTitle "Address"
+      defaultLayout
         [whamlet|
-          <form method=post action=@{ConfirmR} enctype=#{e}>
+          <form method=post action=@{InsertR} enctype=#{e}>
             ^{wp}
             ^{wa}
             <input type=submit>
          |]
-    FormFailure (x:_) -> invalidArgs [x]
-    FormMissing -> invalidArgs ["error"]
+    _ -> invalidArgs ["error"]
 
-postConfirmR :: Handler Html
-postConfirmR = do
-  ((rp, _), _) <- runFormPost $ personForm Nothing
-  ((ra, _), _) <- runFormPost $ addressForm Nothing
-  defaultLayout $ do
+postInsertR :: Handler Html
+postInsertR = do
+  ((rp, _), _) <- runFormPost $ identifyForm "person" $ personForm Nothing
+  ((ra, _), _) <- runFormPost $ identifyForm "address" $ addressForm Nothing
+  defaultLayout $
     case (rp, ra) of
-      (FormSuccess p, FormSuccess a) -> [whamlet|both success|]
-      (FormFailure _, FormFailure _) -> [whamlet|both failure|]
-      (FormMissing, FormMissing) -> [whamlet|both formmissing|]
-      _ -> [whamlet|other case|]
+      (FormSuccess p, FormSuccess a)
+        -> [whamlet|both success. TODO:insert into person and address|]
+      (FormFailure (x:_), FormFailure (y:_))
+        -> [whamlet|both failure|]
+      (FormMissing, FormMissing)
+        -> [whamlet|both formmissing|]
+      _ -> [whamlet|other pattern.|]
 
 main :: IO ()
-main = warp 3000 Wizard
+main = warp 3000 App
