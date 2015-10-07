@@ -33,22 +33,24 @@ data Address = Address { addressPostcode :: Text
                        }
                deriving Show
 
-personForm mv = renderDivs $ Person
+personForm mv = Person
                 <$> areq textField "Name" (personName <$> mv)
                 <*> areq intField "Age" (personAge <$> mv)
 
-hiddenForm v = renderDivs $ Person
-               <$> pure (personName v)
-               <*> pure (personAge v)
+personHiddenForm mv = Person
+                      <$> areq hiddenField "" (personName <$> mv)
+                      <*> areq hiddenField "" (personAge <$> mv)
 
-addressForm mv = renderDivs $ Address
+hiddenForm mp ma = (,) <$> personHiddenForm mp <*> addressForm ma
+
+addressForm mv = Address
                  <$> areq textField "Postcode" (addressPostcode <$> mv)
                  <*> aopt textField "Prefecture" (addressPrefecture <$> mv)
                  <*> aopt textField "City" (addressCity <$> mv)
 
 getEntryR :: Handler Html
 getEntryR = do
-  ((_, w), e) <- runFormPost $ personForm Nothing
+  ((_, w), e) <- runFormPost $ renderDivs $ personForm Nothing
   defaultLayout
     [whamlet|
      <form method=post action=@{EntryR} enctype=#{e}>
@@ -58,34 +60,36 @@ getEntryR = do
 
 postEntryR :: Handler Html
 postEntryR = do
-  ((r, w), e) <- runFormPost $ personForm Nothing
+  ((r, w), e) <- runFormPost $ renderDivs $ personForm Nothing
   case r of
     FormSuccess p -> do
-      ((_, wp), ep) <- runFormPost $ identifyForm "person" $ hiddenForm p
-      ((_, wa), ea) <- runFormPost $ identifyForm "address" $ addressForm Nothing
-      let e = ep <> ea
+      ((_, w), e) <- runFormPost $ renderDivs $ hiddenForm (Just p) Nothing
       defaultLayout
         [whamlet|
           <form method=post action=@{InsertR} enctype=#{e}>
-            ^{wp}
-            ^{wa}
+            ^{w}
             <input type=submit>
          |]
     _ -> invalidArgs ["error"]
 
 postInsertR :: Handler Html
 postInsertR = do
-  ((rp, _), _) <- runFormPost $ identifyForm "person" $ personForm Nothing
-  ((ra, _), _) <- runFormPost $ identifyForm "address" $ addressForm Nothing
+  ((r, _), _) <- runFormPost $ renderDivs $ hiddenForm Nothing Nothing
   defaultLayout $
-    case (rp, ra) of
-      (FormSuccess p, FormSuccess a)
-        -> [whamlet|both success. TODO:insert into person and address|]
-      (FormFailure (x:_), FormFailure (y:_))
-        -> [whamlet|both failure|]
-      (FormMissing, FormMissing)
-        -> [whamlet|both formmissing|]
-      _ -> [whamlet|other pattern.|]
+    case r of
+      FormSuccess (p, a) ->
+        [whamlet|
+         <p>
+           #{personName p} : #{personAge p}
+         <p>
+           #{addressPostcode a}
+           $maybe x <- addressPrefecture a
+             #{x}
+           $maybe x <- addressCity a
+             #{x}
+         |]
+      FormFailure (x:_) -> [whamlet|#{x}|]
+      _ -> [whamlet|missing|]
 
 main :: IO ()
 main = warp 3000 App
