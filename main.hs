@@ -7,7 +7,8 @@
 module Main where
 
 import Yesod
-import Data.Text
+import Data.Text as T
+import Data.Time
 import Data.Monoid
 
 data App = App
@@ -22,8 +23,18 @@ instance Yesod App
 instance RenderMessage App FormMessage where
   renderMessage _ _ = defaultFormMessage
 
+data Sex = Male | Female deriving (Show, Read, Eq, Enum, Bounded)
+instance PathPiece Sex where
+  fromPathPiece "1" = Just Male
+  fromPathPiece "2" = Just Female
+  fromPathPiece _ = error "illegal Sex value?"
+  toPathPiece Male = "1"
+  toPathPiece Female = "2"
+
 data Person = Person { personName :: Text
                      , personAge :: Int
+                     , personBirth :: Maybe Day
+                     , personSex :: Sex
                      }
               deriving Show
 
@@ -36,10 +47,14 @@ data Address = Address { addressPostcode :: Text
 personForm mv = Person
                 <$> areq textField "Name" (personName <$> mv)
                 <*> areq intField "Age" (personAge <$> mv)
+                <*> aopt dayField "Birth" (personBirth <$> mv)
+                <*> areq (selectField optionsEnum) "Sex" (personSex <$> mv)
 
 personHiddenForm mv = Person
                       <$> areq hiddenField "" (personName <$> mv)
                       <*> areq hiddenField "" (personAge <$> mv)
+                      <*> areq hiddenField "" (personBirth <$> mv)
+                      <*> areq hiddenField "" (personSex <$> mv)
 
 hiddenForm mp ma = (,) <$> personHiddenForm mp <*> addressForm ma
 
@@ -80,7 +95,7 @@ postInsertR = do
       FormSuccess (p, a) ->
         [whamlet|
          <p>
-           #{personName p} : #{personAge p}
+           #{personName p} : #{personAge p} : #{show $ personSex p}
          <p>
            #{addressPostcode a}
            $maybe x <- addressPrefecture a
