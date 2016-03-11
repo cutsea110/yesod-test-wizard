@@ -25,11 +25,8 @@ instance RenderMessage App FormMessage where
 
 data Sex = Male | Female deriving (Show, Read, Eq, Enum, Bounded)
 instance PathPiece Sex where
-  fromPathPiece "1" = Just Male
-  fromPathPiece "2" = Just Female
-  fromPathPiece _ = error "illegal Sex value?"
-  toPathPiece Male = "1"
-  toPathPiece Female = "2"
+  fromPathPiece = Just . read . T.unpack
+  toPathPiece = T.pack . show
 
 data Person = Person { personName :: Text
                      , personAge :: Int
@@ -78,7 +75,7 @@ postEntryR = do
   ((r, w), e) <- runFormPost $ renderDivs $ personForm Nothing
   case r of
     FormSuccess p -> do
-      ((_, w), e) <- runFormPost $ renderDivs $ hiddenForm (Just p) Nothing
+      (w, e) <- generateFormPost $ renderDivs $ hiddenForm (Just p) Nothing
       defaultLayout
         [whamlet|
           <form method=post action=@{InsertR} enctype=#{e}>
